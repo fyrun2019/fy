@@ -32,3 +32,20 @@ KEY_VALUE = [ # the key value of observations for each channel.
     'NOMChannel14'
 ]
 
+# [latitude,latitude,longitude,longitude]
+IMG_VALID_REGION = [-80.56672132,80.56672132,-174.71662309,24.11662309]
+
+# global functions
+def isGeoValid(geoCoord,geoType='lon'):
+    '''
+    Judge whether the coordinates are in the valid region.
+    :param geoCoord: latitude or longitude
+    :param geoType: indicate whether it is latitude or longitude.
+    :return:
+    '''
+    if geoType == 'lat':
+        return (geoCoord >= IMG_VALID_REGION[0]) and (geoCoord <= IMG_VALID_REGION[1])
+    elif geoType == 'lon':
+        return (geoCoord >= IMG_VALID_REGION[2]) and (geoCoord <= IMG_VALID_REGION[3])
+
+

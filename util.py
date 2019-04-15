@@ -7,12 +7,13 @@
 @time: 2019/4/4 14:58
 @desc:
 '''
-import os
+
 def getBasePath(pathType):
     filepath = "E:/Code/Python/fy/"
 
     if pathType == 'data':
         return filepath+ 'data/'
-
+    if pathType == 'img':
+        return filepath+'img/'
 
     return filepath
