@@ -94,4 +94,4 @@ if __name__=='__main__':
     GEO_LAT = fillBlank(GEO_LAT,'lat')
     GEO_LON = fillBlank(GEO_LON,'lon')
 
-    saveGeo('%s/%s'%(getBasePath('data'),'FullMask_Grid_4000_999_NULL'),GEO_LAT,GEO_LON)
+    saveGeo('%s/%s'%(getBasePath('data'),'FullMask_Grid_4KM_999_NULL'),GEO_LAT,GEO_LON)

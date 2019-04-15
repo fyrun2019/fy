@@ -12,7 +12,7 @@ def getBasePath(pathType):
     filepath = "E:/Code/Python/fy/"
 
     if pathType == 'data':
-        return filepath+ '/data/'
+        return filepath+ 'data/'
 
 
     return filepath

@@ -13,54 +13,70 @@ from util import getBasePath
 import numpy as np
 datafile = 'FY4A-_AGRI--_N_DISK_1047E_L1-_FDI-_MULT_NOM_20180701000000_20180701001459_4000M_V0001.HDF'
 
-keyDict = ['NOMChannel01','NOMChannel02','NOMChannel03']
-DN_VALID = [0,4095]
-
 import cv2
-def loadData():
-    H5f = h5py.File(getBasePath('data')+datafile,'r')
-    print(H5f.keys())
 
-    dn_chan01 = H5f[keyDict[0]][:]
-    dn_chan02 = H5f[keyDict[1]][:]
-    dn_chan03 = H5f[keyDict[2]][:]
+class DrawAGRI(object):
 
-    H5f.close()
+    def __init__(self,datafilelist,chan_num_list,resolution):
+        self._DN_VALID = [0,4095]
+        self._chan_num_list = chan_num_list
+        self._resolution = resolution
+        self._datafilelist = datafilelist
+        self._fillValue = self._DN_VALID[1]
 
-    return dn_chan01,dn_chan02,dn_chan03
+        self.load()
 
-def mergeChan(dn_ch01,dn_ch02,dn_ch03,resolution):
-    # Caution: The data have to be configured as a tuple of three integers in every grid.
-    return np.dstack((dn_ch01,dn_ch02,dn_ch03))
+    def loadOneDNData(self,filename):
+        H5f = h5py.File(getBasePath('data')+filename,'r')
+        dn_ch_list = []
 
-def fillBlank(dn_ch,fillValue = 0):
-    dn_ch[dn_ch==65535] = fillValue # out of the globe
-    dn_ch[dn_ch == 65534] = fillValue # in the globe
+        for chan in self._chan_num_list:
+            dn_ch_list.append(H5f[config.KEY_VALUE[chan]][:])
 
-    dn_ch[ (dn_ch<DN_VALID[0]) | (dn_ch>DN_VALID[1])] = fillValue
+        H5f.close()
 
-    return dn_ch
+        return dn_ch_list
 
-def scale(dn_ch):
-    return cv2.normalize(dn_ch,None, 0, 255, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_8UC3)
 
-def drawMap(dn_ch,ch_name):
-    '''
+    def mergeChan(self,dn_ch_list):
+        # Caution: The data have to be configured as a tuple of three integers in every grid.
+        return np.dstack(tuple(dn_ch_list))
 
-    :param dn_ch: the dn data of one specific channel
-    :return:
-    '''
+    def fillBlank(self,dn_ch):
+        for idx in range(len(dn_ch)):
+            dn_ch[idx][dn_ch[idx] == 65535] = self._fillValue # out of the globe
+            dn_ch[idx][dn_ch[idx] == 65534] = self._fillValue # in the globe
+            dn_ch[idx][ (dn_ch[idx] < self._DN_VALID[0]) | (dn_ch[idx] > self._DN_VALID[1])] = self._fillValue
 
-    # cv2.imshow("merge channel 01,02,03", dn_ch)
-    filename = '%sChannel%s.jpg' % (getBasePath('data'), ch_name)
-    print(filename)
-    cv2.imwrite(filename, dn_ch, [int(cv2.IMWRITE_JPEG_QUALITY), 50])
+        return dn_ch
+
+    def scaleDN2IMG(self,dn_ch_arr):
+        return cv2.normalize(dn_ch_arr,None, 0, 255, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_8UC3)
+
+    def drawMap(self,filename,dn_ch_arr,ch_name):
+        '''
+        :param dn_ch: the dn data of one specific channel
+        :return:
+        '''
+        tmp = filename.split('_')[9]
+        filename = '%s%s_Channel%s.jpg' % (getBasePath('data'),tmp, ch_name)
+        cv2.imwrite(filename, dn_ch_arr, [int(cv2.IMWRITE_JPEG_QUALITY), 50])
+
+    def makeNameForCombinedChan(self):
+        chan_num = map(lambda x:'%02d'%(x+1), self._chan_num_list)
+        return ''.join(chan_num)
+
+    def load(self):
+        ch_name = self.makeNameForCombinedChan()
+        for filename in self._datafilelist:
+            dn_list = self.loadOneDNData(filename)
+            dn_list = self.fillBlank(dn_list)
+            dn_ch = self.mergeChan(dn_list)
+            dn_ch = self.scaleDN2IMG(dn_ch)
+
+            self.drawMap(filename,dn_ch,ch_name)
 
 if __name__=='__main__':
-    dn_chan01, dn_chan02, dn_chan03 = loadData()
-    dn_chan01, dn_chan02, dn_chan03 = fillBlank(dn_chan01, 4095),fillBlank(dn_chan02, 4095),fillBlank(dn_chan03, 4095)
-    dn_ch = mergeChan(dn_chan03,dn_chan02,dn_chan01,'4KM')
-    dn_ch = scale(dn_ch)
-    drawMap(dn_ch,'030201')
-
-
+    cha_num_list = [4,3,5] # channel 4,5,6
+    datafile_list = ['FY4A-_AGRI--_N_DISK_1047E_L1-_FDI-_MULT_NOM_20180701000000_20180701001459_4000M_V0001.HDF']
+    loader = DrawAGRI(datafile_list,cha_num_list,'4KM')
