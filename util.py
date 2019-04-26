@@ -9,11 +9,14 @@
 '''
 
 def getBasePath(pathType):
-    filepath = "E:/Code/Python/fy/"
+    filepath = "D:/Code/fy/"
 
     if pathType == 'data':
         return filepath+ 'data/'
-    if pathType == 'img':
+    elif pathType == 'img':
         return filepath+'img/'
+    elif pathType == 'typhoon':
+        return filepath+'typhoon/'
+
 
     return filepath

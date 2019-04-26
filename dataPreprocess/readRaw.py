@@ -49,8 +49,10 @@ class ReadRaw(object):
         if arr_type == 'lat':
             numpy_arr[(numpy_arr < config.IMG_VALID_REGION[0]) | (numpy_arr > config.IMG_VALID_REGION[1])] = self._fillValue
         elif arr_type == 'lon':
-            numpy_arr[(numpy_arr < config.IMG_VALID_REGION[2])  | (numpy_arr > config.IMG_VALID_REGION[3])] = self._fillValue
-        assert np.sum(numpy_arr==self._fillValue) < (
+            numpy_arr[numpy_arr<-180.0] = self._fillValue
+            numpy_arr[numpy_arr>180.0] = self._fillValue
+            numpy_arr[(numpy_arr > config.IMG_VALID_REGION[2]) & (numpy_arr < config.IMG_VALID_REGION[3])] = self._fillValue
+        assert np.sum(numpy_arr==self._fillValue) <= (
                 config.IMG_SIZE[self._resolution][0] * config.IMG_SIZE[self._resolution][1])
         # print(np.sum(numpy_arr!=fillvalue)) # the quantity of valid data
         return numpy_arr
@@ -60,16 +62,18 @@ class ReadRaw(object):
         :param fileName: the file name of geographical location table
         :return: the latitude table and longitude table.
         '''
-        lat_ind,lon_ind = 0,0 # index of iteration
+
         GEO_LAT, GEO_LON = self.newGeoMat() # new 2d arrays to save latitudes and longitudes.
         GEO_LAT_SIZE, GEO_LON_SIZE = GEO_LAT.shape[0], GEO_LON.shape[0] # grid size
+        lat_ind, lon_ind = 0, 0  # index of iteration
         with open(fileName,'rb') as f:
             while lat_ind < GEO_LAT_SIZE: # the line indicates latitudes
                 while lon_ind < GEO_LON_SIZE: # the column indicates longitudes
-                    lon = f.read(8)
                     lat = f.read(8)
-                    lon, = struct.unpack('<d' ,lon) # Caution, the data is saved as little-endian data.
-                    lat, = struct.unpack('<d' ,lat)
+                    lon = f.read(8)
+                    lat, = struct.unpack('<d', lat)
+                    lon, = struct.unpack('<d' ,lon) # Caution, the data is saved as little-endian data, not what is said by the official file
+
                     GEO_LON[lat_ind][lon_ind] = lon
                     GEO_LAT[lat_ind][lon_ind] = lat
                     lon_ind += 1
@@ -92,6 +96,12 @@ class ReadRaw(object):
         '''
         return '%s_%d_NULL'%(filename.split('.')[0],self._fillValue)
 
+
+
 if __name__=='__main__':
 
-    loader = ReadRaw('4KM',filename='FullMask_Grid_4000.raw')
+    loader4 = ReadRaw('4KM',filename='FullMask_Grid_4000.raw')
+
+    loader2 = ReadRaw('2KM', filename='FullMask_Grid_2000.raw')
+
+    loader1 = ReadRaw('1KM',filename='FullMask_Grid_1000.raw')

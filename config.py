@@ -15,25 +15,30 @@ IMG_SIZE = {
     '0.5KM':[21984,21984]
 }
 
-KEY_VALUE = [ # the key value of observations for each channel.
-    'NOMChannel01',
-    'NOMChannel02',
-    'NOMChannel03',
-    'NOMChannel04',
-    'NOMChannel05',
-    'NOMChannel06',
-    'NOMChannel07',
-    'NOMChannel08',
-    'NOMChannel09',
-    'NOMChannel10',
-    'NOMChannel11',
-    'NOMChannel12',
-    'NOMChannel13',
-    'NOMChannel14'
-]
+NOM_KEY_VALUE =  {# the key value of observations for each channel.
+    "0.5KM": ("NOMChannel02",),
+            "1KM": ("NOMChannel01", "NOMChannel02", "NOMChannel03"),
+            "2KM": tuple(["NOMChannel%02d" % x for x in range(1, 8)]),
+            "4KM": tuple(["NOMChannel%02d" % x for x in range(1, 15)])
+}
+
+CALIB_KEY_VALUE = {
+    "0.5KM": ("CALChannel02",),
+    "1KM": ("CALChannel01", "CALChannel02", "CALChannel03"),
+    "2KM": tuple(["CALChannel%02d"%x for x in range(1, 8)]),
+    "4KM": tuple(["CALChannel%02d" %x for x in range(1, 15)])
+}
 
 # [latitude,latitude,longitude,longitude]
 IMG_VALID_REGION = [-80.56672132,80.56672132,-174.71662309,24.11662309]
+
+
+# geographical locations
+GEO_RAW_FILES = {
+    '4KM': 'FullMask_Grid_4000.raw',
+    '2KM': 'FullMask_Grid_2000.raw',
+    '1KM': 'FullMask_Grid_1000.raw'
+}
 
 # global functions
 def isGeoValid(geoCoord,geoType='lon'):

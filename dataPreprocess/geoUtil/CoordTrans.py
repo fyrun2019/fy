@@ -7,16 +7,19 @@
 @time: 2019/4/10 8:52
 @desc: Coordinate transformation between image and real geographical coordinates.
 '''
+from numpy import deg2rad, rad2deg, arctan, arcsin, tan, sqrt, cos, sin,power,rint
+import config
+import pandas as pd
+import util
 import numpy as np
 class CoordTrans(object):
     def __init__(self,resolution):
         self._resolution = resolution  # eg. self._resoluttion = '0.5KM'
 
-        self._pi = 3.1415926535897932384626
         self._ea = 6378.137
         self._eb = 6356.7523
         self._h = 42164
-        self._lambda_d = 104.7
+        self._lambda_d = deg2rad(104.7)
         self._COFF = {
             '0.5KM': 10991.5,
             '1KM': 5495.5,
@@ -48,6 +51,13 @@ class CoordTrans(object):
             '0.5KM':[21984,21984]
         }
 
+        # offset for calculating image index
+        self._OFFSET = {  # lon,lat
+            '4KM': [0.005, -0.05],
+            '2KM': [0,0],
+            '1KM': [0,0]
+        }
+
         self._coff = self._COFF[self._resolution]
         self._loff = self._LOFF[self._resolution]
         self._cfac = self._CFAC[self._resolution]
@@ -59,110 +69,144 @@ class CoordTrans(object):
         self._geo_fillvalue = 999.0
         self._img_fillvalue = -1
         self._img_size = self._IMG_SIZE[self._resolution][0]
+        self._offset = self._OFFSET[self._resolution]
+
+
+
 
     def isIMGValid(self,imgCoord):
         return (imgCoord>=0) and (imgCoord<=self._img_size)
 
-    def isGeoValid(self,geoCoord,geoType='lon'):
-        if geoType == 'lat':
-            return (geoCoord >= self._GEO_VALID_REGION[0]) and (geoCoord <= self._GEO_VALID_REGION[1] )
-        elif geoType == 'lon':
-            return (geoCoord >= self._GEO_VALID_REGION[2]) and (geoCoord <= self._GEO_VALID_REGION[3])
+    # def isGeoValid(self,geoCoord,geoType='lon'):
+    #     if geoType == 'lat':
+    #         return (geoCoord >= self._GEO_VALID_REGION[0]) and (geoCoord <= self._GEO_VALID_REGION[1] )
+    #     elif geoType == 'lon':
+    #         return ((geoCoord <= self._GEO_VALID_REGION[2]) and geoCoord >= -180.0) or (geoCoord >= self._GEO_VALID_REGION[3] and geoCoord<=180.0)
 
     def geo2ImgCoord(self,lon,lat):
-        l,c = 0,0
+        l,c = 0,0 # start from 0,0
 
         # step 1
-        if not (((self.isGeoValid(lon,'lon')) and (self.isGeoValid(lat,'lat')))):
-            print(30 * '-' + 'Out of valid region' + 30 * '-')
-            return self._img_fillvalue,self._img_fillvalue
+        # if not (((self.isGeoValid(lon,'lon')) and (self.isGeoValid(lat,'lat')))):
+        #     print(30 * '-' + 'Out of valid region' + 30 * '-')
+        #     return self._img_fillvalue,self._img_fillvalue
 
         # step 2
-        lon = lon * self._pi / 180.0
-        lat = lat * self._pi / 180.0
+        lon = deg2rad(lon+self._offset[0])
+        lat = deg2rad(lat+self._offset[1])
 
         # step 3
-        phi_e = np.arctan((self._eb**2)/(self._ea**2)*np.tan(lat))
+        phi_e = arctan((self._eb**2)/(self._ea**2)*tan(lat))
         lambda_e = lon
 
         # step 4
-        tmp = (self._ea**2-self._eb**2)/(self._ea**2)*(np.cos(phi_e)**2)
-        r_e = self._eb/np.sqrt(1-tmp)
+        tmp = (self._ea**2-self._eb**2)/(self._ea**2)*(cos(phi_e)**2)
+        r_e = self._eb/sqrt(1-tmp)
 
         # step 5
-        r1 = self._h-r_e*np.cos(phi_e)*np.cos(lambda_e-self._lambda_d)
-        r2 = -r_e*np.cos(phi_e)*np.sin(lambda_e-self._lambda_d)
-        r3 = r_e*np.sin(phi_e)
+        r1 = self._h-r_e*cos(phi_e)*cos(lambda_e-self._lambda_d)
+        r2 = -r_e*cos(phi_e)*sin(lambda_e-self._lambda_d)
+        r3 = r_e*sin(phi_e)
 
         # step 6
-        r_n = np.sqrt(r1**2+r2**2+r3**2)
-        x = np.arctan(-r2/r1)*(180.0/self._pi)
-        y = np.arcsin(-r3/r_n)*(180.0/self._pi)
+        r_n = sqrt(r1**2+r2**2+r3**2)
+        x = rad2deg(arctan(-r2/r1))
+        y = rad2deg(arcsin(-r3/r_n))
 
         # step 7
-        c = self._coff + x/np.power(2,16)*self._cfac
-        l = self._loff + y/np.power(2,16)*self._lfac
+        c = self._coff + x/power(2,16)*self._cfac
+        l = self._loff + y/power(2,16)*self._lfac
 
-        if self.isIMGValid(l) and self.isIMGValid(c):
-            return np.ceil(l),np.ceil(c)
+        l[ (l<0) | (l>=self._img_size)] = self._img_fillvalue
+        c[(c < 0) | (c >= self._img_size)] = self._img_fillvalue
+
+        return rint(l),rint(c)
 
     def img2GeoCoord(self,l,c):
         lon = 0.0
         lat = 0.0
 
         # step 1
-        x = self._pi * (c-self._coff)*np.power(2,16)/180.0/self._cfac
-        y = self._pi * (l-self._loff) * np.power(2,16)/180.0/self._lfac
+        x = deg2rad((c-self._coff)*power(2,16)/self._cfac)
+        y = deg2rad((l-self._loff) * power(2,16)/self._lfac)
 
         # step 2
-        s_d_tmp_1 = self._h * np.cos(x)*np.cos(y)
+        s_d_tmp_1 = self._h * cos(x)*cos(y)
         s_d_tmp_2 \
-            = np.cos(y)**2 + (self._ea**2)/(self._eb**2)*(np.sin(y))**2
-        s_d = np.sqrt(s_d_tmp_1**2-s_d_tmp_2*(self._h**2-self._ea**2))
+            = cos(y)**2 + (self._ea**2)/(self._eb**2)*(sin(y))**2
+        s_d = sqrt(s_d_tmp_1**2-s_d_tmp_2*(self._h**2-self._ea**2))
         s_n = (s_d_tmp_1-s_d)/s_d_tmp_2
-        s1 = self._h-s_n*np.cos(x)*np.cos(y)
-        s2 = s_n*np.sin(x)*np.cos(y)
-        s3 = -s_n*np.sin(y)
-        s_xy = np.sqrt(s1**2+s2**2)
+        s1 = self._h-s_n*cos(x)*cos(y)
+        s2 = s_n*sin(x)*cos(y)
+        s3 = -s_n*sin(y)
+        s_xy = sqrt(s1**2+s2**2)
 
         # step 3
-        lat = 180.0/self._pi*np.arctan(s2/s1)+self._lambda_d
-        lon = 180.0/self._pi*np.arctan(((self._ea**2) / (self._eb**2))*(s3/s_xy))
+        lon = rad2deg(arctan(s2/s1)+self._lambda_d)
+        lat = rad2deg(arctan(((self._ea**2) / (self._eb**2))*(s3/s_xy)))
 
-        if self.isGeoValid(lon,'lon') and self.isGeoValid(lat,'lat'):
-            return lon,lat
-        else:
-            print(30 * '-' + 'Out of valid region' + 30*'-')
-            return self._geo_fillvalue,self._geo_fillvalue
-
+        # if self.isGeoValid(lon,'lon') and self.isGeoValid(lat,'lat'):
         return lon,lat
+        # else:
+            # print(30 * '-' + 'Out of valid region' + 30*'-')
+            # return self._geo_fillvalue,self._geo_fillvalue
+
+        # return lon,lat
+
+def getAllGridGeoCoord(calculator,resolution='4KM'):
+    GEO_LAT = np.ndarray((config.IMG_SIZE[resolution][0], config.IMG_SIZE[resolution][1]), dtype=np.float64)
+    GEO_LON = np.ndarray((config.IMG_SIZE[resolution][0], config.IMG_SIZE[resolution][1]), dtype=np.float64)
+
+    lat_size,lon_size = config.IMG_SIZE[resolution][0],config.IMG_SIZE[resolution][1]
+
+    lat_ind, lon_ind = 0,0  # index of iteration
+    while lat_ind < lat_size:  # the line indicates latitudes
+        while lon_ind < lon_size:  # the column indicates longitudes
+            GEO_LON[lat_ind][lon_ind],GEO_LAT[lat_ind][lon_ind] = calculator.img2GeoCoord(lat_ind,lon_ind)
+            lon_ind += 1
+        lon_ind = 0
+        lat_ind += 1
+    return GEO_LAT, GEO_LON
+
+def saveGeo(GEO_LAT,GEO_LON,filename='%stransFormula_IMG_2_GEO'%util.getBasePath('data')):
+    lat_df = pd.DataFrame(GEO_LAT)
+    lat_df.to_csv('%s_%s_lat.csv' % (filename,res), header=True, index=True)
+
+    lon_df = pd.DataFrame(GEO_LON)
+    lon_df.to_csv('%s_%s_lon.csv' % (filename,res), header=True, index=True)
+
+# def getIMGBBoxByGeoBox(calculator,geo_range_str,res):
+#     # 若geo_range没有指定，则读取全部数据，不定标
+#     geo_range = eval(geo_range_str,res)
+#
+#     lat_S, lat_N, lon_W, lon_E, step = geo_range
+#     lat = np.arange(lat_N, lat_S - 0.005, -step)
+#     lon = np.arange(lon_W, lon_E + 0.005, step)
+#     lon, lat = np.meshgrid(lon, lat)
+#     l, c = calculator.geo2ImgCoord(lon, lat)  # 求标称全圆盘行列号
+#     l = np.rint(l).astype(np.uint16)
+#     c = np.rint(c).astype(np.uint16)
+#     # DISK全圆盘数据和REGC中国区域数据区别在起始行号和终止行号
+#     channel = self.h5file[NOMChannelname][()][self.l - self.l_begin, self.c]
+#     CALChannel = self.h5file[CALChannelname][()]  # 定标表
+#     self.channels[channelname] = CALChannel[channel]  # 缺测值！
+
 
 if __name__ == '__main__':
-
-    calculator = CoordTrans('4KM')
-
     res = '4KM'
-    l0,c0 = 890,727
-    # the corresponding latitude and longitude got from location file are (-1.05792E-26, -1.0744)
+    calculator = CoordTrans(resolution=res)
 
-    lon,lat = calculator.img2GeoCoord(l0,c0)
+    GEO_LAT,GEO_LON = getAllGridGeoCoord(calculator,res)
+    saveGeo(GEO_LAT,GEO_LON)
 
-    print('lon:  %.2f' % lon)
-    print('lat:  %.2f' % lat)
+    res = '2KM'
+    calculator = CoordTrans(resolution=res)
 
-    print(30*'='+'test geo to image'+30*'=')
+    GEO_LAT, GEO_LON = getAllGridGeoCoord(calculator, res)
+    saveGeo(GEO_LAT, GEO_LON)
 
-    lon0,lat0 = 18.32,78.67
+    res = '1KM'
+    calculator = CoordTrans(resolution=res)
 
-    l,c = -1,-1
-
-    l,c = calculator.geo2ImgCoord(lon0,lat0)
-    lon_test, lat_test = calculator.img2GeoCoord(l,c)
-
-    if not (calculator.isGeoValid(lon_test,'lon')) or (calculator.isGeoValid(lat_test,'lat')):
-        lon0 = lon0 + 0.01
-        lat0 = lat0 + 0.01
-        l,c = calculator.geo2ImgCoord(lon0,lat0)
-
-    print('l: %d'%l)
-    print('c: %d'%c)
+    GEO_LAT, GEO_LON = getAllGridGeoCoord(calculator, res)
+    saveGeo(GEO_LAT, GEO_LON)
